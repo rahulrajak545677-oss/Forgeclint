@@ -12,6 +12,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Locate Android project
+        id: loc
+        run: |
+          F=$(find . -name settings.gradle.kts -not -path "*/node_modules/*" | head -1)
+          if [ -z "$F" ]; then echo "settings.gradle.kts not found"; find . -maxdepth 3 -not -path "./.git/*"; exit 1; fi
+          echo "dir=$(dirname "$F")" >> "$GITHUB_OUTPUT"
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -25,10 +32,10 @@ jobs:
           gradle-version: 8.9
 
       - name: Build debug APK
-        working-directory: android
+        working-directory: ${{ steps.loc.outputs.dir }}
         run: gradle assembleDebug --stacktrace
 
       - uses: actions/upload-artifact@v4
         with:
           name: app-debug
-          path: android/app/build/outputs/apk/debug/*.apk
+          path: ${{ steps.loc.outputs.dir }}/app/build/outputs/apk/debug/*.apk
