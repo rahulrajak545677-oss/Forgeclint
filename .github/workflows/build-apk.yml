@@ -1,23 +1,28 @@
 name: Build APK
 
 on:
-  workflow_dispatch:
   push:
-    branches: [ main, master ]
+  workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
-    timeout-minutes: 30
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
+      - name: Unzip project
+        run: unzip -o ForgeClient-v2.zip
+
       - name: Locate Android project
-        id: loc
+        id: locate
         run: |
-          F=$(find . -name settings.gradle.kts -not -path "*/node_modules/*" | head -1)
-          if [ -z "$F" ]; then echo "settings.gradle.kts not found"; find . -maxdepth 3 -not -path "./.git/*"; exit 1; fi
-          echo "dir=$(dirname "$F")" >> "$GITHUB_OUTPUT"
+          f=$(find . \( -name settings.gradle.kts -o -name settings.gradle \) -not -path "*/node_modules/*" | head -1)
+          if [ -z "$f" ]; then
+            echo "settings.gradle(.kts) not found"
+            find . -not -path "./.git/*"
+            exit 1
+          fi
+          echo "dir=$(dirname "$f")" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-java@v4
         with:
@@ -25,17 +30,21 @@ jobs:
           java-version: 17
 
       - name: Accept Android SDK licenses
-        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses || true
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
 
       - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: 8.9
 
       - name: Build debug APK
-        working-directory: ${{ steps.loc.outputs.dir }}
-        run: gradle assembleDebug --stacktrace
+        working-directory: ${{ steps.locate.outputs.dir }}
+        run: |
+          if [ -f gradlew ]; then
+            chmod +x gradlew
+            ./gradlew assembleDebug --stacktrace
+          else
+            gradle assembleDebug --stacktrace
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
           name: app-debug
-          path: ${{ steps.loc.outputs.dir }}/app/build/outputs/apk/debug/*.apk
+          path: ${{ steps.locate.outputs.dir }}/**/build/outputs/apk/debug/*.apk
